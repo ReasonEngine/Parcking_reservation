@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Parking Reservation System</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{
+    font-family:Arial;
+    background:#f4f6f9;
+}
+.container{
+    max-width:450px;
+    margin:30px auto;
+    background:#fff;
+    padding:25px;
+    border-radius:10px;
+    box-shadow:0 5px 15px rgba(0,0,0,.1);
+}
+h2,h3{text-align:center;color:#1e3c72}
+input,select,button{
+    width:100%;
+    padding:10px;
+    margin:8px 0;
+}
+button{
+    background:#1e3c72;
+    color:white;
+    border:none;
+    cursor:pointer;
+}
+button:hover{background:#16325c}
+table{
+    width:100%;
+    border-collapse:collapse;
+    margin-top:10px;
+}
+th,td{
+    border:1px solid #ccc;
+    padding:8px;
+    text-align:center;
+}
+.logout{text-align:right}
+.logout a{color:red;text-decoration:none}
+.small{font-size:13px;color:gray;text-align:center}
+.danger{background:#c0392b}
+</style>
+</head>
+
+<body>
+
+<div class="container" id="app"></div>
+
+<script>
+// ================= INTERNAL DATABASE =================
+const users = [
+ {name:"Admin", email:"admin@parking.com", phone:"0000", role:"admin"},
+ {name:"Abel", email:"abel@gmail.com", phone:"0911111111", role:"user"},
+ {name:"Sara", email:"sara@gmail.com", phone:"0922222222", role:"user"}
+];
+
+if(!localStorage.slots){
+ localStorage.slots = JSON.stringify([
+  {slot:"A1",status:"available"},
+  {slot:"A2",status:"available"},
+  {slot:"B1",status:"available"},
+  {slot:"B2",status:"available"}
+ ]);
+}
+
+if(!localStorage.reservations){
+ localStorage.reservations = JSON.stringify([]);
+}
+
+let currentUser = JSON.parse(localStorage.currentUser || null);
+
+// ================= RENDER =================
+function render(){
+ if(!currentUser) loginPage();
+ else if(currentUser.role==="admin") adminPage();
+ else userPage();
+}
+
+// ================= LOGIN =================
+function loginPage(){
+ document.getElementById("app").innerHTML = `
+ <h2>Parking Reservation System</h2>
+ <h3>Login</h3>
+
+ <input id="email" placeholder="Email">
+ <input id="phone" placeholder="Phone Number">
+ <button onclick="login()">Login</button>
+
+ <p class="small">
+
+ </p>
+ `;
+}
+
+function login(){
+ let user = users.find(
+  u => u.email===email.value && u.phone===phone.value
+ );
+ if(user){
+  localStorage.currentUser = JSON.stringify(user);
+  currentUser = user;
+  render();
+ } else {
+  alert("Access Denied! Invalid Email or Phone");
+ }
+}
+
+// ================= USER =================
+function userPage(){
+ let slots = JSON.parse(localStorage.slots);
+ let reservations = JSON.parse(localStorage.reservations)
+  .filter(r=>r.user===currentUser.email);
+
+ let options = slots
+  .filter(s=>s.status==="available")
+  .map(s=>`<option>${s.slot}</option>`).join("");
+
+ let rows = reservations.map((r,i)=>`
+ <tr>
+  <td>${r.slot}</td>
+  <td>${r.date}</td>
+  <td>${r.time}</td>
+  <td><button class="danger" onclick="cancel(${i})">Cancel</button></td>
+ </tr>
+ `).join("");
+
+ document.getElementById("app").innerHTML = `
+ <div class="logout"><a href="#" onclick="logout()">Logout</a></div>
+ <h2>Welcome ${currentUser.name}</h2>
+
+ <h3>Reserve Parking Slot</h3>
+ <select id="slot">${options}</select>
+ <input type="date" id="date">
+ <input type="time" id="time">
+ <button onclick="reserve()">Reserve</button>
+
+ <h3>Your Reservations</h3>
+ <table>
+ <tr><th>Slot</th><th>Date</th><th>Time</th><th>Action</th></tr>
+ ${rows || "<tr><td colspan='4'>No reservations</td></tr>"}
+ </table>
+ `;
+}
+
+function reserve(){
+ let slots = JSON.parse(localStorage.slots);
+ let reservations = JSON.parse(localStorage.reservations);
+
+ let selected = slot.value;
+
+ slots = slots.map(s=>{
+  if(s.slot===selected) s.status="booked";
+  return s;
+ });
+
+ reservations.push({
+  user: currentUser.email,
+  slot: selected,
+  date: date.value,
+  time: time.value
+ });
+
+ localStorage.slots = JSON.stringify(slots);
+ localStorage.reservations = JSON.stringify(reservations);
+
+ alert("Reservation Successful");
+ render();
+}
+
+function cancel(index){
+ let reservations = JSON.parse(localStorage.reservations);
+ let userRes = reservations.filter(r=>r.user===currentUser.email);
+ let canceled = userRes[index];
+
+ reservations = reservations.filter(
+  r => !(r.user===canceled.user && r.slot===canceled.slot)
+ );
+
+ let slots = JSON.parse(localStorage.slots);
+ slots = slots.map(s=>{
+  if(s.slot===canceled.slot) s.status="available";
+  return s;
+ });
+
+ localStorage.slots = JSON.stringify(slots);
+ localStorage.reservations = JSON.stringify(reservations);
+
+ alert("Reservation Cancelled");
+ render();
+}
+
+// ================= ADMIN =================
+function adminPage(){
+ let reservations = JSON.parse(localStorage.reservations);
+
+ let rows = reservations.map(r=>`
+ <tr>
+  <td>${r.user}</td>
+  <td>${r.slot}</td>
+  <td>${r.date}</td>
+  <td>${r.time}</td>
+ </tr>
+ `).join("");
+
+ document.getElementById("app").innerHTML = `
+ <div class="logout"><a href="#" onclick="logout()">Logout</a></div>
+ <h2>Admin Dashboard</h2>
+
+ <table>
+ <tr><th>User</th><th>Slot</th><th>Date</th><th>Time</th></tr>
+ ${rows || "<tr><td colspan='4'>No data</td></tr>"}
+ </table>
+
+ <button class="danger" onclick="resetSystem()">Reset System (Demo)</button>
+ `;
+}
+
+function resetSystem(){
+ if(confirm("Reset all reservations and slots?")){
+  localStorage.removeItem("reservations");
+  localStorage.removeItem("slots");
+  location.reload();
+ }
+}
+
+// ================= LOGOUT =================
+function logout(){
+ localStorage.removeItem("currentUser");
+ currentUser=null;
+ render();
+}
+
+render();
+</script>
+
+</body>
+</html>
